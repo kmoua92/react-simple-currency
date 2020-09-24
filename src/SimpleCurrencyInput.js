@@ -8,11 +8,14 @@ class SimpleCurrencyInput extends React.Component {
     this.onInputType = this.onInputType.bind(this)
     this.formattedRawValue = this.formattedRawValue.bind(this)
     this.getRawValue = this.getRawValue.bind(this)
+    this.includesNegativeSymbol = this.includesNegativeSymbol.bind(this)
+    this.resetNegativeOnDelete = this.resetNegativeOnDelete.bind(this)
 
     this.state = {
       rawValue: this.props.value,
       tabIndex: this.props.tabIndex,
-      readOnly: this.props.readOnly
+      readOnly: this.props.readOnly,
+      isNegative: false,
     }
   }
 
@@ -28,9 +31,20 @@ class SimpleCurrencyInput extends React.Component {
     }
   }
 
+  resetNegativeOnDelete(event) {
+    const key = event.keyCode || event.charCode
+    const isBackspace = key === 8
+    const isDelete = key === 46
+    if ((isBackspace || isDelete) && this.state.isNegative && !this.state.rawValue) {
+      this.setState({isNegative: false})
+    }
+  }
+
   onInputType (event) {
     const input = event.target.value
-    let rawValue = this.getRawValue(input)
+    const isNegative = this.props.allowNegative && this.includesNegativeSymbol(input)
+    let rawValue = this.getRawValue(input, isNegative)
+
     if (!rawValue) {
       rawValue = 0
     }
@@ -38,8 +52,15 @@ class SimpleCurrencyInput extends React.Component {
     this.notifyParentWithRawValue(rawValue)
 
     this.setState({
-      rawValue
+      rawValue,
+      isNegative,
     })
+  }
+
+  includesNegativeSymbol(input) {
+    const regEx = new RegExp(/\-/g)
+    const hasNegative = regEx.test(input)
+    return hasNegative
   }
 
   notifyParentWithRawValue (rawValue) {
@@ -47,14 +68,19 @@ class SimpleCurrencyInput extends React.Component {
     this.props.onInputChange(rawValue, display)
   }
 
-  getRawValue (displayedValue) {
+  getRawValue (displayedValue, isNegative) {
     let result = displayedValue
 
-    result = removeOccurrences(result, this.props.delimiter)
-    result = removeOccurrences(result, this.props.separator)
-    result = removeOccurrences(result, this.props.unit)
+    result = removeOccurrences(result, this.props.delimiter, this.props.allowNegative)
+    result = removeOccurrences(result, this.props.separator, this.props.allowNegative)
+    result = removeOccurrences(result, this.props.unit, this.props.allowNegative)
+    result = result.replace(/ /g, '') // remove whitespaces so parseInt works for negative values
+
 
     let intValue = parseInt(result)
+    if (this.props.allowNegative && isNegative && intValue > 0) {
+      intValue = intValue * -1
+    }
 
     return intValue
   }
@@ -63,7 +89,7 @@ class SimpleCurrencyInput extends React.Component {
     const minChars = '0'.length + this.props.precision
 
     let result = ''
-    result = `${rawValue}`
+    result = `${Math.abs(rawValue)}`
 
     if (result.length < minChars) {
       const leftZeroesToAdd = minChars - result.length
@@ -90,6 +116,10 @@ class SimpleCurrencyInput extends React.Component {
       result = `${this.props.unit} ${result}`
     }
 
+    if (this.props.allowNegative && this.state.isNegative) {
+      result = `-${result}`
+    }
+
     return result
   }
 
@@ -110,6 +140,7 @@ class SimpleCurrencyInput extends React.Component {
         autoCorrect={this.props.autoCorrect}
         name={this.props.name}
         placeholder={this.props.placeholder}
+        onKeyDown={this.resetNegativeOnDelete}
       />
     )
   }
@@ -125,8 +156,13 @@ const repeatZeroes = (times) => {
   return result
 }
 
-const removeOccurrences = (from, toRemove) => {
-  toRemove = toRemove.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&')
+const removeOccurrences = (from, toRemove, allowNegative) => {
+  if (allowNegative) {
+    toRemove = toRemove.replace(/[\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&')
+  } else {
+    toRemove = toRemove.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&')
+  }
+
   var re = new RegExp(toRemove, 'g')
   return from.replace(re, '')
 }
@@ -144,7 +180,8 @@ SimpleCurrencyInput.propTypes = {
   separator: PropTypes.string,
   tabIndex: PropTypes.number,
   unit: PropTypes.string,
-  value: PropTypes.number.isRequired
+  value: PropTypes.number.isRequired,
+  allowNegative: PropTypes.bool,
 }
 
 SimpleCurrencyInput.defaultProps = {
@@ -157,7 +194,8 @@ SimpleCurrencyInput.defaultProps = {
   autoFocus: false,
   onInputChange: () => {},
   onInputBlur: () => {},
-  onInputFocus: () => {}
+  onInputFocus: () => {},
+  allowNegative: false,
 }
 
 export default SimpleCurrencyInput

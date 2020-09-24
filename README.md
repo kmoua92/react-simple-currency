@@ -1,3 +1,5 @@
+# _`npm run build` will not work on Node 8.x and higher_
+
 # Simple Currency Input
 
 React Simple Currency is a <input /> wrapper that takes a value in cents and then

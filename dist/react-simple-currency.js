@@ -28,11 +28,14 @@ var SimpleCurrencyInput = (function (_React$Component) {
     this.onInputType = this.onInputType.bind(this);
     this.formattedRawValue = this.formattedRawValue.bind(this);
     this.getRawValue = this.getRawValue.bind(this);
+    this.includesNegativeSymbol = this.includesNegativeSymbol.bind(this);
+    this.resetNegativeOnDelete = this.resetNegativeOnDelete.bind(this);
 
     this.state = {
       rawValue: this.props.value,
       tabIndex: this.props.tabIndex,
-      readOnly: this.props.readOnly
+      readOnly: this.props.readOnly,
+      isNegative: false
     };
   }
 
@@ -51,10 +54,22 @@ var SimpleCurrencyInput = (function (_React$Component) {
       }
     }
   }, {
+    key: 'resetNegativeOnDelete',
+    value: function resetNegativeOnDelete(event) {
+      var key = event.keyCode || event.charCode;
+      var isBackspace = key === 8;
+      var isDelete = key === 46;
+      if ((isBackspace || isDelete) && this.state.isNegative && !this.state.rawValue) {
+        this.setState({ isNegative: false });
+      }
+    }
+  }, {
     key: 'onInputType',
     value: function onInputType(event) {
       var input = event.target.value;
-      var rawValue = this.getRawValue(input);
+      var isNegative = this.props.allowNegative && this.includesNegativeSymbol(input);
+      var rawValue = this.getRawValue(input, isNegative);
+
       if (!rawValue) {
         rawValue = 0;
       }
@@ -62,8 +77,16 @@ var SimpleCurrencyInput = (function (_React$Component) {
       this.notifyParentWithRawValue(rawValue);
 
       this.setState({
-        rawValue: rawValue
+        rawValue: rawValue,
+        isNegative: isNegative
       });
+    }
+  }, {
+    key: 'includesNegativeSymbol',
+    value: function includesNegativeSymbol(input) {
+      var regEx = new RegExp(/\-/g);
+      var hasNegative = regEx.test(input);
+      return hasNegative;
     }
   }, {
     key: 'notifyParentWithRawValue',
@@ -73,14 +96,18 @@ var SimpleCurrencyInput = (function (_React$Component) {
     }
   }, {
     key: 'getRawValue',
-    value: function getRawValue(displayedValue) {
+    value: function getRawValue(displayedValue, isNegative) {
       var result = displayedValue;
 
-      result = removeOccurrences(result, this.props.delimiter);
-      result = removeOccurrences(result, this.props.separator);
-      result = removeOccurrences(result, this.props.unit);
+      result = removeOccurrences(result, this.props.delimiter, this.props.allowNegative);
+      result = removeOccurrences(result, this.props.separator, this.props.allowNegative);
+      result = removeOccurrences(result, this.props.unit, this.props.allowNegative);
+      result = result.replace(/ /g, ''); // remove whitespaces so parseInt works for negative values
 
       var intValue = parseInt(result);
+      if (this.props.allowNegative && isNegative && intValue > 0) {
+        intValue = intValue * -1;
+      }
 
       return intValue;
     }
@@ -90,7 +117,7 @@ var SimpleCurrencyInput = (function (_React$Component) {
       var minChars = '0'.length + this.props.precision;
 
       var result = '';
-      result = '' + rawValue;
+      result = '' + Math.abs(rawValue);
 
       if (result.length < minChars) {
         var leftZeroesToAdd = minChars - result.length;
@@ -117,6 +144,10 @@ var SimpleCurrencyInput = (function (_React$Component) {
         result = this.props.unit + ' ' + result;
       }
 
+      if (this.props.allowNegative && this.state.isNegative) {
+        result = '-' + result;
+      }
+
       return result;
     }
   }, {
@@ -132,7 +163,12 @@ var SimpleCurrencyInput = (function (_React$Component) {
         disabled: this.props.disabled,
         autoFocus: this.props.autoFocus,
         tabIndex: this.state.tabIndex,
-        readOnly: this.state.readOnly
+        readOnly: this.state.readOnly,
+        autoComplete: this.props.autoComplete,
+        autoCorrect: this.props.autoCorrect,
+        name: this.props.name,
+        placeholder: this.props.placeholder,
+        onKeyDown: this.resetNegativeOnDelete
       });
     }
   }]);
@@ -150,8 +186,13 @@ var repeatZeroes = function repeatZeroes(times) {
   return result;
 };
 
-var removeOccurrences = function removeOccurrences(from, toRemove) {
-  toRemove = toRemove.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+var removeOccurrences = function removeOccurrences(from, toRemove, allowNegative) {
+  if (allowNegative) {
+    toRemove = toRemove.replace(/[\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+  } else {
+    toRemove = toRemove.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
+  }
+
   var re = new RegExp(toRemove, 'g');
   return from.replace(re, '');
 };
@@ -169,7 +210,8 @@ SimpleCurrencyInput.propTypes = {
   separator: PropTypes.string,
   tabIndex: PropTypes.number,
   unit: PropTypes.string,
-  value: PropTypes.number.isRequired
+  value: PropTypes.number.isRequired,
+  allowNegative: PropTypes.bool
 };
 
 SimpleCurrencyInput.defaultProps = {
@@ -182,7 +224,8 @@ SimpleCurrencyInput.defaultProps = {
   autoFocus: false,
   onInputChange: function onInputChange() {},
   onInputBlur: function onInputBlur() {},
-  onInputFocus: function onInputFocus() {}
+  onInputFocus: function onInputFocus() {},
+  allowNegative: false
 };
 
 exports['default'] = SimpleCurrencyInput;
